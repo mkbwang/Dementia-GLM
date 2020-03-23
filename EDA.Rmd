@@ -2,7 +2,10 @@
 title: "Dementia Data EDA"
 author: "Mukai Wang 98830336"
 date: "3/15/2020"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 urlcolor: blue
 ---
 
@@ -110,7 +113,7 @@ mar_dem <- ggplot(dementia, aes(x=CLINDEM, fill=MARRIED)) + geom_bar()+
 grid.arrange(dep_dem, race_dem, rl_dem, sex_dem,mar_dem, ncol=3, nrow=2)
 ```
 
-To take a closer look, we calculate the odds ratio and carry out a pearson chi-square test for each pair of variables(including the response variable dementia). The odds ratio and the p values of the test are printed below,
+To take a closer look, we calculate the odds ratio and carry out a [pearson chi-square test](http://web.pdx.edu/~newsomj/uvclass/ho_chisq.pdf) for each pair of variables(including the response variable dementia). The odds ratio and the p values of the test are printed below,
 
 ```{r}
 bin_vars = c("CLINDEM", "DEP", "RACE", "RLDEM", "SEX", "MARRIED")

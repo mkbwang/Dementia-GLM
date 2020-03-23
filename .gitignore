@@ -1,1 +1,5 @@
 *.pdf
+*.html
+*.RData
+*.Rhistory
+
