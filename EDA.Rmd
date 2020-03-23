@@ -1,0 +1,203 @@
+---
+title: "Dementia Data EDA"
+author: "Mukai Wang 98830336"
+date: "3/15/2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(knitr.kable.NA = '')
+```
+
+First read in the data.
+
+```{r}
+url = "https://raw.githubusercontent.com/skybullbobby/Dementia-GLM/master/data/mds_center9661.csv"
+dementia = read.csv(url)
+```
+
+
+
+# Exploratory Data Analysis
+
+The purpose of EDA is to grasp a sense of the distribution of the response variable and the predictor variables. Issues to watch out for include uneven distribution and strong collinearity among the covariates.
+
+```{r, message=FALSE}
+if(!require("knitr")) {install.packages("knitr")}
+if(!require("ggplot2")) {install.packages("ggplot2")}
+if(!require("gridExtra")) {install.packages("gridExtra")}
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+```
+
+
+```{r, fig.width=3, fig.height=4}
+dem_freq = table(dementia$CLINDEM)
+ggplot(dementia, aes(x=CLINDEM)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")
+```
+
+The distribution of the diagnosis (which is the response variable) has a even distribution between "yes"(`r dem_freq[["Yes"]]`) and "no"(`r dem_freq[["No"]]`).
+
+## Categorical Covariates
+
+There are four binary covariates: `DEP`(self reported depression, yes or no), `RACE`(black or white), `RLDEM`(if there is relative with dementia) and `SEX`(male or female). There is another categorical variable called `MARISTAT` that has five levels of values.
+
+First explore the distribution of these variables themselves visually.
+
+```{r, fig.width=7, fig.height=5}
+dep_plot <- ggplot(dementia, aes(x=DEP))+geom_bar()+
+  xlab("")+ggtitle("Depression Distribution")+theme(text = element_text(size=10))
+race_plot <- ggplot(dementia, aes(x=RACE))+geom_bar()+
+  xlab("")+ggtitle("Race Distribution")+theme(text = element_text(size=10))
+relative_plot <- ggplot(dementia, aes(x=RLDEM))+geom_bar()+
+  xlab("")+ggtitle("Relative with Dementia")+theme(text = element_text(size=10))
+sex_plot <- ggplot(dementia, aes(x=SEX))+geom_bar()+
+  xlab("")+ggtitle("Sex Distribution")+theme(text = element_text(size=10))
+mari_plot <- ggplot(dementia, aes(x=MARISTAT)) + geom_bar() + 
+  xlab("")+ggtitle("Marital Status")+theme(text = element_text(size=10),
+        axis.text.x = element_text(angle=90, hjust=1))
+grid.arrange(dep_plot, race_plot, relative_plot, sex_plot,mari_plot, ncol=3, nrow=2)
+```
+
+We notice that the depression and race variable  are very disproportionate in this dataset. We need to watch out for this when fitting further models. We also notice that people who are "married" take up over a half of all the individuals, so I may well turn the `MARISTAT` into a binary variable called `MARRIED` with two values "Yes" and "No".
+
+```{r}
+dementia$MARRIED = "No"
+dementia$MARRIED[which(dementia$MARISTAT=="Married")]="Yes"
+dementia$MARRIED = as.factor(dementia$MARRIED)
+```
+
+A table with the ratio in each binary variable is also provided.
+
+```{r}
+binvars = c("DEP", "RACE", "RLDEM", "SEX", "MARRIED")
+ratio_bin = matrix(rep(NA, 5),1,5)
+rownames(ratio_bin) <- "Ratio"
+colnames(ratio_bin) <- binvars
+for (i in 1:5){
+  freq_table = table(dementia[binvars[i]])
+  newratio = freq_table[1]/freq_table[2]
+  if (newratio >=1) {ratio_bin[1,i] = newratio}
+  else {ratio_bin[1, i] = 1/newratio} 
+  # make all the ratios larger than 1 for comparison
+}
+kable(ratio_bin, digits=3)
+```
+
+
+Then I want to explore the distribution of each covariate in those with and without dementia separately. First explore visually.
+
+```{r}
+dep_dem <- ggplot(dementia, aes(x=CLINDEM, fill=DEP)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")+
+  labs(fill="Depression")+theme(text = element_text(size=10))
+race_dem <- ggplot(dementia, aes(x=CLINDEM, fill=RACE)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")+
+  labs(fill="Race")+theme(text = element_text(size=10))
+rl_dem <- ggplot(dementia, aes(x=CLINDEM, fill=RLDEM)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")+
+  labs(fill="Relative")+theme(text = element_text(size=10))
+sex_dem <- ggplot(dementia, aes(x=CLINDEM, fill=SEX)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")+
+  labs(fill="Sex")+theme(text = element_text(size=10))
+mar_dem <- ggplot(dementia, aes(x=CLINDEM, fill=MARRIED)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")+
+  labs(fill="Married")+theme(text = element_text(size=10))
+grid.arrange(dep_dem, race_dem, rl_dem, sex_dem,mar_dem, ncol=3, nrow=2)
+```
+
+To take a closer look, we calculate the odds ratio and carry out a [pearson chi-square test](http://web.pdx.edu/~newsomj/uvclass/ho_chisq.pdf) for each pair of variables(including the response variable dementia). The odds ratio and the p values of the test are printed below,
+
+```{r}
+bin_vars = c("CLINDEM", "DEP", "RACE", "RLDEM", "SEX", "MARRIED")
+odds_ratio = matrix(NA, 6, 6)
+teststats = matrix(NA,6,6)
+pval = matrix(NA, 6, 6)
+for (i in 1:5){
+  for (j in (i+1):6){
+    var1 = bin_vars[i]
+    var2 = bin_vars[j]
+    margin1 = table(dementia[[var1]])/894
+    margin2 = table(dementia[[var2]])/894
+    expected_ratio = margin1 %o% margin2
+    contingency = table(dementia[[var1]], dementia[[var2]])
+    oratio = contingency[1,1]*contingency[2,2]/(contingency[1,2]*contingency[2,1])
+    odds_ratio[i,j] = oratio
+    expected = matrix(NA,2,2)
+    expected = 894 * expected_ratio
+    teststats[i,j] = sum((contingency - expected)^2/expected)
+    pval[i,j] = 1-pchisq(teststats[i,j], 1)
+  }
+}
+rownames(pval) = bin_vars
+colnames(pval) = bin_vars
+rownames(odds_ratio) = bin_vars
+colnames(odds_ratio) = bin_vars
+kable(pval, digits=3, caption="P value of Chi-Squared Test")
+kable(odds_ratio, digits=3, caption="Odds Ratio")
+```
+
+Since I am doing multiple testing here, the statistical threshold that I should use is the p value of `r 0.05/15`. We notice that dementia is strongly correlated with all the binary covariates except the indicator of whether a patient has a relative with dementia. The covariates themselves also have strong correlation with each other, which we should watch out for when fitting logistic regressions.
+
+
+## Continuous Variable
+
+There are two continuous variables `EDUC`(education years) and `FEVALAGE`(age when first evaluation). Plot a histogram for both of them.
+
+```{r, fig.width=7, fig.height=3}
+education <- ggplot(dementia, aes(x=EDUC, y=..density..))+geom_histogram(stat="bin", binwidth=3,colour="black", fill="white")+
+  geom_density()+xlab("Years")+ggtitle("Education Years")
+fevage <- ggplot(dementia, aes(x=FEVALAGE, y=..density..))+geom_histogram(stat="bin", binwidth=5,colour="black", fill="white")+
+  geom_density()+xlab("Age")+ggtitle("First Evaluation Age")
+grid.arrange(education, fevage, ncol=2, nrow=1)
+```
+
+Both variables have an approximately normal distribution. We can also inspect the densities and histograms for those with and without dementia.
+
+```{r,fig.width=7, fig.height=3}
+education_group <- ggplot(dementia, aes(x=EDUC, y=..density..,fill=CLINDEM))+geom_histogram(stat="bin", binwidth=3, alpha=0.2)+
+  geom_density(alpha=0.2)+xlab("Years")+ggtitle("Education Years")+
+  labs(fill="Dementia")
+fevage_group <- ggplot(dementia, aes(x=FEVALAGE, y=..density..,fill=CLINDEM))+geom_histogram(stat="bin", binwidth=5, alpha=0.2)+
+  geom_density(alpha=0.2)+xlab("Age")+ggtitle("First Evaluation Age")+
+  labs(fill="Dementia")
+grid.arrange(education_group, fevage_group, ncol=2, nrow=1)
+```
+
+We can take a closer look by carrying out t tests of these two continuous variables with all the other binary variables including dementia.
+
+```{r}
+ttable = matrix(NA, 6, 2)
+cont_vars = c("EDUC", "FEVALAGE")
+for (i in 1:6){
+  for (j in 1:2){
+    test_result <- t.test(dementia[[cont_vars[j]]] ~ dementia[[bin_vars[i]]])
+    ttable[i, j] <- test_result$p.value
+  }
+}
+rownames(ttable) <- bin_vars
+colnames(ttable) <- cont_vars
+kable(ttable, caption="P value of T tests", digits=4)
+```
+
+Because of the multiple testing issue, the significance threshold should be `r round(0.05/12, digits=4)`. There are some significant relationships between continuous ahd binary variables, therefore we need to watch out for potential confounding issues.
+
+# Logistic Regression Examples
+
+The original dataset is already clean enough to fit a logistic regression.
+```{r}
+model <- glm(CLINDEM~DEP, data=dementia, family=binomial(link=logit))
+summary(model)
+```
+
+Besides the deviance mentioned in class, another primitive way to explore the goodness of fit is to draw a [ROC curve](https://en.wikipedia.org/wiki/Receiver_operating_characteristic) and check out the area under the curve. Code to be added.
+
+Although the response variable(dementia) is evenly distributed, the covariate of interest(depression) is not evenly distributed. This may or may not be an issue(need to ask professor), but if we are to tackle this problem, undersampling or oversampling is a plausible way(according to this short [blog post](https://towardsdatascience.com/methods-for-dealing-with-imbalanced-data-5b761be45a18)). Code to be added.
+
