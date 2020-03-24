@@ -1,0 +1,116 @@
+---
+title: "BIOSTAT651 Project Report: Associations with Clinically Diagnosed Dementia"
+author: "Yajing Li, Qiuhua Liu, Courtney Morgan, Mukai Wang"
+date: "3/23/2020"
+output: 
+  bookdown::pdf_document2: default
+urlcolor: blue
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+if(!require("bookdown")) {install.packages("bookdown")}
+if(!require("knitr")) {install.packages("knitr")}
+if(!require("ggplot2")) {install.packages("ggplot2")}
+if(!require("gridExtra")) {install.packages("gridExtra")}
+library(ggplot2)
+library(gridExtra)
+library(knitr)
+```
+
+
+# Introduction
+Dementia is a common cognitive disease prevalent among elderly people across the world. According to WHO and leading medical centers in US, risk factors include lack of exercise, smoking, alchohol, high blood pressure, depression, low educational attainment and so on. In this project, we look into a dataset collected by the National Alzheimer’s Consulting Center (NACC). The dataset includes demographics, cognitive status and clinical diagnosis of 894 individuals. Our main goal is to explore the association between clinical diagnosis of dementia and self-reported
+depression. Meanwhile we also investigate the roles of age, sex, race, family history, marriage status, and education.
+
+# Methods
+
+## Exploratory Data Analysis and Data Preprocessing
+
+We first carry out exploratory data analysis to get a sense of the distributions of the response variable(dementia diagnosis) and covariates. If the response variable and any of the categorical covariates have extremely imbalanced distributions, we have to come up with some data preprocessing techniques or sampling techniques during model fitting. We also need to check out the distribution of continuous covariates and decide if we need to do any transform based on practical or statistical reasons. 
+
+## Model Fitting and Selection
+
+![Model Fitting Procedure](./procedure.png){#id .class}
+
+# Results
+
+## Exploratory Data Analysis and Data Preprocessing
+
+There are eight variables of importance in the dataset. `CLINDEM` represents the clinical dementia diagnosis, with two possible outcomes "Yes" and "No". Among the covariates five of them are categorical covariates. `DEP` contains diagnosis of depression ("Yes"/"No"). `SEX` stands for subjects' sex ("Male"/"Female"). `RACE` stands for subjects' race ("White"/"Black"). `RLDEM` keeps track of whether a subject has a relative diagnosed with dementia("Yes"/"No"). `MARISTAT` contains the marital status of subjects ("Married"/"Widowed"/"Divorced"/"Separated"/"Never Married"). There are other two continuous covariates. `FEVALAGE` refers to the age when a subject was first evaluated for dementia. `EDUC` refers to the number of schools that an individual completed. 
+
+
+
+```{r}
+url = "https://raw.githubusercontent.com/skybullbobby/Dementia-GLM/master/data/mds_center9661.csv"
+dementia = read.csv(url)
+dem_freq = table(dementia$CLINDEM)
+```
+
+Among all the 894 subjects, there are `r dem_freq[["Yes"]]` people with dementia and `r dem_freq[["No"]]` who don't. The distribution is balanced, so we don't need to worry about it.
+
+Figure \@ref(fig:categorical) contains barplots for the response variable and five categorical covariates. There is no big issue with the four binary covariates. For the marital status variable, we notice that "Married" takes up a large proportion, so we decide to recode the `MARISTAT` to a binary variable with values "Yes" (corresponding to "Married") and "No"(corresponding to other values).
+
+```{r subplots}
+dem_plot <- ggplot(dementia, aes(x=CLINDEM)) + geom_bar()+
+  xlab("")+ggtitle("Dementia")
+dep_plot <- ggplot(dementia, aes(x=DEP))+geom_bar()+
+  xlab("")+ggtitle("Depression")+theme(text = element_text(size=10))
+race_plot <- ggplot(dementia, aes(x=RACE))+geom_bar()+
+  xlab("")+ggtitle("Race")+theme(text = element_text(size=10))
+relative_plot <- ggplot(dementia, aes(x=RLDEM))+geom_bar()+
+  xlab("")+ggtitle("Relative with Dementia")+theme(text = element_text(size=10))
+sex_plot <- ggplot(dementia, aes(x=SEX))+geom_bar()+
+  xlab("")+ggtitle("Sex")+theme(text = element_text(size=10))
+mari_plot <- ggplot(dementia, aes(x=MARISTAT)) + geom_bar() + 
+  xlab("")+ggtitle("Marital Status")+theme(text = element_text(size=10),
+        axis.text.x = element_text(angle=90, hjust=1))
+```
+
+
+```{r}
+dementia$marry = "No"
+dementia$marry[which(dementia$MARISTAT=="Married")]="Yes"
+dementia$marry = as.factor(dementia$marry)
+```
+
+We then explore the two continuous variables by plotting a histogram for each of them (figure \@ref(fig:continuous)).
+
+```{r}
+education <- ggplot(dementia, aes(x=EDUC, y=..density..))+geom_histogram(stat="bin", binwidth=3,colour="black", fill="white")+
+  xlab("Years")+ggtitle("Education Years")
+fevage <- ggplot(dementia, aes(x=FEVALAGE, y=..density..))+geom_histogram(stat="bin", binwidth=5,colour="black", fill="white")+
+  xlab("Age")+ggtitle("First Evaluation Age")
+```
+
+Both covariates have a normal distribution, so there isn't anything statistically concerning. Nevertheless we decide to categorize the education years of all the subjects into three bins. The first bin includes those smaller than 12 (no college degree). The second bin includes those between 12 and 18(with a bachelors/masters degree). The third bin includes those larger than 18(with a doctorate degree). As to the first evaluation age, we center it to make the variable more interpretable during model inference. 
+
+## Model Fitting and Selection
+
+
+
+
+# Discussion
+
+# Contribution from each Team Member
+
+# References
+
+1. [WHO description of dementia](https://www.who.int/news-room/fact-sheets/detail/dementia)
+
+2. [Mayo Clinic description of dementia](https://www.mayoclinic.org/diseases-conditions/dementia/symptoms-causes/syc-20352013)
+
+
+# Appendix
+
+
+```{r categorical, fig.cap="Barplots of Dementia Diagnosis and Categorical Covariates", fig.width=7, fig.height=5}
+grid.arrange(dem_plot, dep_plot, race_plot, relative_plot, sex_plot,mari_plot, ncol=3, nrow=2)
+```
+
+
+```{r continuous, fig.cap="Barplots of Continuous Covariates", fig.width=7, fig.height=3}
+grid.arrange(education, fevage, ncol=2, nrow=1)
+```
+
