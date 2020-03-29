@@ -1,0 +1,129 @@
+---
+title: "651-proj-diagnosis"
+author: "Yajingli"
+date: "3/21/2020"
+output: pdf_document
+---
+
+
+```{r,warning=FALSE}
+# Loading packages and data
+library(boot)
+library(glmnet)
+library(ggfortify)
+library(ggplot2)
+library(car)
+library(arm)
+library(lmtest)
+library(gridExtra)
+library(ResourceSelection)
+mds_data=read.csv("data/mds_clean_data.csv")
+head(mds_data)
+dim(mds_data)
+```
+
+```{r}
+# Fitting models
+model.interaction=glm(factor(CLINDEM_num) ~ factor(DEP_num)*factor(SEX_num) + factor(edu.level)+FEVALAGE.center + factor(RACE_num) + factor(RLDEM_num) + factor(marry), data = mds_data,family = binomial())
+
+model.no.interaction=glm(factor(CLINDEM_num) ~ factor(DEP_num)+factor(SEX_num) + factor(edu.level)+FEVALAGE.center + factor(RACE_num) + factor(RLDEM_num) + factor(marry), data = mds_data,family = binomial())
+
+#model.allsignif=glm(factor(CLINDEM_num) ~ factor(DEP_num)*factor(SEX_num) + factor(edu.level)+FEVALAGE.center + factor(RACE_num) + factor(marry), data = mds_data,family = binomial())
+
+# no more significant interactions
+#model.more.interaction=glm(factor(CLINDEM_num) ~ factor(DEP_num)*factor(SEX_num)*factor(edu.level)*factor(marry)+FEVALAGE.center + factor(RACE_num) + factor(RLDEM_num) , data = mds_data,family = binomial())
+
+summary(model.interaction)
+summary(model.no.interaction)
+#summary(model.allsignif)
+#summary(model.more.interaction)
+```
+
+## Model Comparison
+```{r}
+lmtest::lrtest(model.no.interaction,model.interaction)
+```
+P-Value=0.002594, so the result is significant. Model with interaction is better than model without interaction. (The AIC of interaction model is smaller, too.)
+
+
+## Residuals
+```{r}
+
+par(mfrow=c(1,2))
+arm::binnedplot(fitted(model.interaction), 
+           residuals(model.interaction, type = "response"), 
+           nclass = NULL, 
+           xlab = "Expected Values", 
+           ylab = "Average residual", 
+           main = "Binned residual plot from model with interaction", 
+           cex.pts = 0.8, 
+           col.pts = 1, 
+           col.int = "gray")
+arm::binnedplot(fitted(model.no.interaction), 
+           residuals(model.interaction, type = "response"), 
+           nclass = NULL, 
+           xlab = "Expected Values", 
+           ylab = "Average residual", 
+           main = "Binned residual plot from model without interaction", 
+           cex.pts = 0.8, 
+           col.pts = 1, 
+           col.int = "gray")
+```
+
+
+```{r}
+df.dv=data.frame(obs=mds_data$X,Deviance1=residuals(model.interaction,type='deviance'),Deviance2=residuals(model.no.interaction,type='deviance'))
+ggplot(data=df.dv, aes(x=obs))+geom_point(aes(y=Deviance1, colour="With Interaction"))+geom_point(aes(y=Deviance2, colour="Only Main Effects"))+labs(title="Deviance of two models", x ="Observations", y = "Deviance")
+
+```
+
+## Goodness of Fit test 
+```{r}
+pearson=residuals(model.interaction,type='pearson')
+sum(pearson^2)
+#df=n-q-1=894-9-1=884
+qchisq(0.95,884)
+ResourceSelection::hoslem.test(mds_data$CLINDEM_num, fitted(model.interaction))
+
+pearson=residuals(model.no.interaction,type='pearson')
+sum(pearson^2)
+#df=n-q-1=894-9-1=884
+qchisq(0.95,884)
+ResourceSelection::hoslem.test(mds_data$CLINDEM_num, fitted(model.no.interaction))
+```
+For Goodness of Fitting test, H0: Model fits the data well.
+943 <954, so we could not reject H0 at level 0.05.(but it's really close to the boundary.)
+And if we use HL GOF test, we still can't reject the H0.
+
+973>954, so we could reject H0 at level 0.05 using pearson test.
+But why it seems that no interaction model is better in Hosmer and Lemeshow test...
+
+## Outliers & High Leverage
+```{r}
+leverage=glm.diag(model.interaction)$h
+cook.d=glm.diag(model.interaction)$cook
+names(leverage)[which(leverage>2*mean(leverage))]
+names(cook.d)[which(cook.d>4/894)]
+df.plt<-data.frame(obs=mds_data$X, Leverage=leverage, CookD=cook.d)
+p1=ggplot(data=df.plt, aes(x=obs))+geom_point(aes(y=Leverage))
+p2=ggplot(data=df.plt, aes(x=obs))+geom_point(aes(y=CookD))
+leverage=glm.diag(model.no.interaction)$h
+cook.d=glm.diag(model.no.interaction)$cook
+names(leverage)[which(leverage>2*mean(leverage))]
+names(cook.d)[which(cook.d>4/894)]
+df.plt<-data.frame(obs=mds_data$X, Leverage=leverage, CookD=cook.d)
+p3=ggplot(data=df.plt, aes(x=obs))+geom_point(aes(y=Leverage))
+p4=ggplot(data=df.plt, aes(x=obs))+geom_point(aes(y=CookD))
+gridExtra::grid.arrange(p1, p2,p3,p4,nrow = 2)
+```
+
+## VIF 
+```{r}
+data.frame(VIF=vif(model.interaction))
+data.frame(VIF=vif(model.no.interaction))
+```
+
+
+
+
+
